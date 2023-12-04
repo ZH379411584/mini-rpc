@@ -15,6 +15,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class RpcProvider implements InitializingBean, BeanPostProcessor {
@@ -62,6 +64,7 @@ public class RpcProvider implements InitializingBean, BeanPostProcessor {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
+                                    .addLast(new IdleStateHandler(0, 0, 60, TimeUnit.SECONDS))
                                     .addLast(new MiniRpcEncoder())
                                     .addLast(new MiniRpcDecoder())
                                     .addLast(new RpcRequestHandler(rpcServiceMap));

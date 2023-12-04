@@ -7,7 +7,9 @@ import com.mini.rpc.serialization.SerializationFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class MiniRpcEncoder extends MessageToByteEncoder<MiniRpcProtocol<Object>> {
 
     /*
@@ -21,6 +23,7 @@ public class MiniRpcEncoder extends MessageToByteEncoder<MiniRpcProtocol<Object>
     */
     @Override
     protected void encode(ChannelHandlerContext ctx, MiniRpcProtocol<Object> msg, ByteBuf byteBuf) throws Exception {
+        log.info("encode:{}",msg);
         MsgHeader header = msg.getHeader();
         byteBuf.writeShort(header.getMagic());
         byteBuf.writeByte(header.getVersion());
@@ -28,9 +31,13 @@ public class MiniRpcEncoder extends MessageToByteEncoder<MiniRpcProtocol<Object>
         byteBuf.writeByte(header.getMsgType());
         byteBuf.writeByte(header.getStatus());
         byteBuf.writeLong(header.getRequestId());
-        RpcSerialization rpcSerialization = SerializationFactory.getRpcSerialization(header.getSerialization());
-        byte[] data = rpcSerialization.serialize(msg.getBody());
-        byteBuf.writeInt(data.length);
-        byteBuf.writeBytes(data);
+        if(null != msg.getBody()){
+            RpcSerialization rpcSerialization = SerializationFactory.getRpcSerialization(header.getSerialization());
+            byte[] data = rpcSerialization.serialize(msg.getBody());
+            byteBuf.writeInt(data.length);
+            byteBuf.writeBytes(data);
+        }else {
+            byteBuf.writeInt(0);
+        }
     }
 }

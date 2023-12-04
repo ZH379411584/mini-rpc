@@ -9,6 +9,7 @@ import com.mini.rpc.protocol.MsgStatus;
 import com.mini.rpc.protocol.MsgType;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.timeout.IdleStateEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cglib.reflect.FastClass;
 
@@ -62,5 +63,15 @@ public class RpcRequestHandler extends SimpleChannelInboundHandler<MiniRpcProtoc
         FastClass fastClass = FastClass.create(serviceClass);
         int methodIndex = fastClass.getIndex(methodName, parameterTypes);
         return fastClass.invoke(methodIndex, serviceBean, parameters);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent) {
+            log.info("idle check happen, so close the connection");
+            ctx.close();
+        } else {
+            super.userEventTriggered(ctx, evt);
+        }
     }
 }

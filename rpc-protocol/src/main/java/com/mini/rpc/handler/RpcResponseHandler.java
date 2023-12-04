@@ -7,8 +7,10 @@ import com.mini.rpc.common.MiniRpcResponse;
 import com.mini.rpc.protocol.MiniRpcProtocol;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import lombok.extern.slf4j.Slf4j;
 
-public class RpcResponseHandler extends SimpleChannelInboundHandler<MiniRpcProtocol<MiniRpcResponse>> {
+@Slf4j
+public class RpcResponseHandler extends SimpleChannelInboundHandler<MiniRpcProtocol<MiniRpcResponse>>{
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, MiniRpcProtocol<MiniRpcResponse> msg) {
@@ -16,5 +18,7 @@ public class RpcResponseHandler extends SimpleChannelInboundHandler<MiniRpcProto
         MiniRpcFuture<MiniRpcResponse> future = MiniRpcRequestHolder.REQUEST_MAP.remove(requestId);
         future.getPromise().setSuccess(msg.getBody());
     }
+
+
 }
 
