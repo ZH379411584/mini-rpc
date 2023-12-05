@@ -13,8 +13,18 @@ public class HelloController {
     @RpcReference(serviceVersion = "1.0.0", timeout = 3000)
     private HelloFacade helloFacade;
 
+    @RpcReference(serviceVersion = "1.1.0", timeout = 3000)
+    @SuppressWarnings({"SpringJavaAutowiredFieldsWarningInspection", "SpringJavaInjectionPointsAutowiringInspection"})
+    private HelloFacade helloFacade2;
+
     @RequestMapping(value = "/hello", method = RequestMethod.GET)
     public String sayHello() {
         return helloFacade.hello("mini rpc");
+    }
+
+
+    @RequestMapping(value = "/hello2", method = RequestMethod.GET)
+    public String sayHello2() {
+        return helloFacade2.hello("mini rpc");
     }
 }

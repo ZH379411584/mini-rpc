@@ -17,7 +17,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 
-public class RpcInvokerProxy implements InvocationHandler {
+public class RpcInvokerProxy implements InvocationHandler{
 
     private final String serviceVersion;
     private final long timeout;
@@ -31,6 +31,23 @@ public class RpcInvokerProxy implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+        if (method.getDeclaringClass() == Object.class) {
+            String methodName = method.getName();
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            if (parameterTypes.length == 0) {
+                if ("toString".equals(methodName)) {
+                    return proxy.getClass().getName() + "@" +
+                            Integer.toHexString(System.identityHashCode(proxy)) +
+                            ", with InvocationHandler " + this;
+                } else if ("hashCode".equals(methodName)) {
+                    return System.identityHashCode(proxy);
+                }
+            } else if (parameterTypes.length == 1 && "equals".equals(methodName)) {
+                return proxy == args[0];
+            }
+        }
+
         MiniRpcProtocol<MiniRpcRequest> protocol = new MiniRpcProtocol<>();
         MsgHeader header = new MsgHeader();
         long requestId = MiniRpcRequestHolder.REQUEST_ID_GEN.incrementAndGet();

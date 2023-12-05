@@ -20,19 +20,27 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+
 
 @Slf4j
 public class RpcConsumer{
     private final Bootstrap bootstrap;
     private final EventLoopGroup eventLoopGroup;
 
-    private Map<ServiceMeta, Channel> channelMap = new ConcurrentHashMap<>();
+    private Map<ServiceMeta, Holder> channelHolderMap = new ConcurrentHashMap<>();
 
-    private Map<ServiceMeta, Boolean> connectingChannel = new ConcurrentHashMap<>();
+    private static class Holder{
+        private Channel channel;
 
-    private Lock lock = new ReentrantLock();
+        public void setChannel(Channel channel) {
+            this.channel = channel;
+        }
+
+        public Channel getChannel() {
+            return channel;
+        }
+    }
+
 
     private static volatile RpcConsumer instance;
 
@@ -63,7 +71,14 @@ public class RpcConsumer{
                     }
                 });
     }
-
+    private Holder getOrCreateHolder(ServiceMeta serviceMetadata) {
+        Holder holder = channelHolderMap.get(serviceMetadata);
+        if (holder == null) {
+            channelHolderMap.putIfAbsent(serviceMetadata, new Holder());
+            holder = channelHolderMap.get(serviceMetadata);
+        }
+        return holder;
+    }
 
     public void sendRequest(MiniRpcProtocol<MiniRpcRequest> protocol, RegistryService registryService) throws Exception {
         MiniRpcRequest request = protocol.getBody();
@@ -74,43 +89,31 @@ public class RpcConsumer{
         ServiceMeta serviceMetadata = registryService.discovery(serviceKey, invokerHashCode);
 
         if (serviceMetadata != null) {
-
-            Boolean isInitializing = connectingChannel.get(serviceMetadata);
-            if (isInitializing != null && isInitializing) {
-                log.info("connecting serviceMetadata:{} ", serviceMetadata);
-                lock.lock();
-                try {
-                    while (connectingChannel.get(serviceMetadata)) {
-                        // 等待初始化完成
+            final Holder holder = getOrCreateHolder(serviceMetadata);
+            Channel channel = holder.getChannel();
+            if (channel == null ||  (!channel.isActive())) {
+                synchronized (holder) {
+                    channel = holder.getChannel();
+                    // double check
+                    if (channel == null ||  (!channel.isActive())) {
+                        ChannelFuture future = bootstrap.connect(serviceMetadata.getServiceAddr(), serviceMetadata.getServicePort());
+                        future.addListener((ChannelFutureListener) arg0 -> {
+                            if (future.isSuccess()) {
+                                log.info("connect rpc server {} on port {} success.", serviceMetadata.getServiceAddr(), serviceMetadata.getServicePort());
+                            } else {
+                                log.error("connect rpc server {} on port {} failed.", serviceMetadata.getServiceAddr(), serviceMetadata.getServicePort());
+                                future.cause().printStackTrace();
+                            }
+                        });
+                        channel = future.sync().channel();
+                        holder.setChannel(channel);
                     }
-                } finally {
-                    lock.unlock();
                 }
+            }else {
+                log.info("from channelHolderMap serviceMetadata:{} ", serviceMetadata);
             }
+            channel.writeAndFlush(protocol);
 
-            Channel channel = channelMap.get(serviceMetadata);
-            if (channel != null && channel.isActive()) {
-                channel.writeAndFlush(protocol);
-                log.info("from channelMap serviceMetadata:{} ", serviceMetadata);
-                return;
-            }
-
-            connectingChannel.put(serviceMetadata, true);
-
-            ChannelFuture future = bootstrap.connect(serviceMetadata.getServiceAddr(), serviceMetadata.getServicePort());
-
-            future.addListener((ChannelFutureListener) arg0 -> {
-                if (future.isSuccess()) {
-                    channelMap.put(serviceMetadata, future.channel());
-                    connectingChannel.put(serviceMetadata, false);
-                    future.channel().writeAndFlush(protocol);
-
-                    log.info("connect rpc server {} on port {} success.", serviceMetadata.getServiceAddr(), serviceMetadata.getServicePort());
-                } else {
-                    log.error("connect rpc server {} on port {} failed.", serviceMetadata.getServiceAddr(), serviceMetadata.getServicePort());
-                    future.cause().printStackTrace();
-                }
-            });
             //future.channel().writeAndFlush(protocol);
         }
     }
